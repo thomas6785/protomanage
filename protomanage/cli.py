@@ -48,6 +48,7 @@ def main():
     else:
         subcommand = subcommands[subcommand_str]
         subcommand.method()
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
