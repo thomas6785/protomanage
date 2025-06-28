@@ -8,11 +8,13 @@ GREENFONT = \033[0;32m
 ERRORFONT = \033[0;33m
 RESETFONT = \033[0m
 
+SOURCE_CODE_FOLDER = protomanage
+
 report_dir                    = ./reports/$(TIMESTAMP)
 pytest_report_file            = $(report_dir)/test_results/index.html
 pytest_report_arg             = --html=$(pytest_report_file)
 pytest_coverage_report_folder = $(report_dir)/coverage
-pytest_coverage_args          = --cov=src --cov=tests --cov-report html:$(pytest_coverage_report_folder)
+pytest_coverage_args          = --cov=$(SOURCE_CODE_FOLDER) --cov=tests --cov-report html:$(pytest_coverage_report_folder)
 pylint_output_location        = ./reports/lint_results.txt
 pylint_rc_file                = .pylintrc
 
@@ -21,13 +23,7 @@ pylint_rc_file                = .pylintrc
 .PHONY: help
 help:
 	echo "This Makefile provides convenient workflow utilities for devs"
-	echo "Targets:"
-	echo "    lint: Run Pylint and output to $(live_pylint_file)"
-	echo "    smoke: Run smoke tests to check for basic syntax issues"
-	echo "    all-tests: Run all Pytest tests and output to $(report_dir)"
-	echo "    venv-init: Create a new Python3.12 venv and install requirements"
-	echo "    preview-docs: Create local preview of docs as HTML files for checking before a Confluence publish"
-	echo "    publish-docs: Publish docs to Confluence page (only automatic docs, most are manually written on Confluence)"
+	echo "I don't want to write help text - to see targets, just open the Makefile"
 
 # TODO add more smoke tests!
 .PHONY: smoke
@@ -73,7 +69,7 @@ venv-exists:
 
 .PHONY: venv-init
 venv-init:
-	echo -e "Creating Python 3.12 venv at $(VENV_DIR)"
+	echo -e "Creating Python venv at $(VENV_DIR)"
 	$(PYTHON_VERSION) -m venv $(VENV_DIR)
 	echo -e "Installing dependencies for devs..."
 	$(PYTHON) -m pip install -r requirements.txt
@@ -106,7 +102,7 @@ dist:
 	fi
 
 	$(PYTHON) -m build | (head -n 3 ; echo -e "\n    hiding extra log messages...\n"; tail -n 3)
-	rm -r src/*.egg-info
+	rm -r $(SOURCE_CODE_FOLDER)/*.egg-info
 
 	if [ -n "$(BUILD_VERSION)" ]; then \
 		echo "Returning to previous git commit"; \
@@ -127,3 +123,7 @@ clean:            ## Clean artefacts, caches, and temporary files
 	rm -rf htmlcov
 	rm -rf .tox/
 	rm -rf docs/_build
+
+.PHONY: update-requirements
+update-requirements:
+	$(PYTHON) -m pip freeze > requirements.txt

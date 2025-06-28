@@ -1,7 +1,10 @@
 astroid==3.3.10
+build==1.2.2.post1
 dill==0.4.0
 isort==6.0.1
 mccabe==0.7.0
+packaging==25.0
 platformdirs==4.3.8
 pylint==3.3.7
+pyproject_hooks==1.2.0
 tomlkit==0.13.3
