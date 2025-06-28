@@ -1,0 +1,22 @@
+# Caches and machine-specific crap
+**/__pycache__/
+**/.venv/
+**.log
+*.pyc
+*.pyo
+**/.coverage
+**/.pytest_cache/
+**/.vscode/
+
+# Auto-generated content should not be tracked
+dist/*
+reports/*
+**/auto_*/
+docs/_build/
+
+# Do not track folder is useful sometimes
+do_not_track/
+
+# Ignore temporary editor files
+**/*~
+**/*.swp

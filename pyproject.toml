@@ -1,0 +1,11 @@
+[project]
+name = "protomanage"
+version = "0.dev0"
+# Do not change the version number manually - it is updated automatically by make dist. Use git tag to number versions and it will automatically be assigned here. Any commit without a tag will be built as version "0.dev0"
+dependencies = [
+
+]
+requires-python = ">=3.12"
+
+[tool.setuptools]
+package-dir = {"" = "protomanage"}
