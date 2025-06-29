@@ -9,6 +9,7 @@ import json
 
 from .items import Item,InboxItem
 from . import strings
+from .execution_context import ExecutionContext
 
 REPO_FOLDER_NAME = ".protomanage"
 HOME_REPO_PATH = (Path("~") / REPO_FOLDER_NAME).expanduser()
@@ -183,25 +184,25 @@ class Repo():
         """Get the path to the repo."""
         return self._repo_path
 
-    def add_to_inbox(self, context: str, text: str) -> None:
+    def add_to_inbox(self, context: ExecutionContext, text: str) -> None:
         """Add a simple InboxItem to the repo's item list."""
 
         item = InboxItem(context=context, text=text)  # Create an InboxItem instance
         self.add_item(item)  # Add the item to the repo's items
         self._logger.info(strings.INBOX_ITEM_ADDED)
 
-    def show_inbox(self, context: str) -> List[InboxItem]:
+    def show_inbox(self) -> List[InboxItem]:
         """Retrieve all InboxItems from the repo's items list."""
 
         inbox_items = [item for item in self._items if isinstance(item, InboxItem)]
         if not inbox_items:
             self._logger.info("No items in inbox.")
-            context.respond("No items in inbox.")
+            print("No items in inbox.")
         else:
             self._logger.info(f"Found {len(inbox_items)} items in inbox.")
 
             for item in inbox_items:
-                context.respond(str(item))
+                print(str(item))
 
 class HomeRepo(Repo):
     """The home repo is a special repo at ~. In addition to being a normal repo, it contains a list of all other repos, and all other repos inherit config from it."""
