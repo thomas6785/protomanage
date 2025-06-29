@@ -96,16 +96,16 @@ class Repo():
                     item_data = json.loads(item_file.read_text())
                 except Exception as e:
                     self._logger.error(f"Failed to load item from {item_file}: {e}")
-                    raise ValueError(f"Failed to load item from {item_file}: {e}")
+                    raise ValueError(f"Failed to load item from {item_file}: {e}") from e
 
                 # Validate the file name matches the UUID in the JSON
                 if item_file.stem != item_data.get("uuid"):
-                    self._logger.error(f"UUID mismatch: file {item_file.name} vs item_data uuid {item_data.get('uuid')}")
-                    raise ValueError(f"UUID mismatch: file {item_file.name} vs item_data uuid {item_data.get('uuid')}")
+                    self._logger.error(f"UUID mismatch: file {item_file.name} vs item_data uuid {item_data.get("uuid")}")
+                    raise ValueError(f"UUID mismatch: file {item_file.name} vs item_data uuid {item_data.get("uuid")}") from e
 
                 # Convert to an Item and store it
                 items.append(Item.from_dict(item_data))
-        
+
         return items
 
     def _load_version(self) -> str:

@@ -1,3 +1,5 @@
+"""TODO docs: write docstring"""
+
 class ChildClassError(Exception):
     """Base exception for child class implementation errors."""
 
