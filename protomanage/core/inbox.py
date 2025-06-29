@@ -65,7 +65,7 @@ def inbox(text: List[str]) -> None:
     """Add a simple InboxItem to the repo's item list."""
 
     _add_to_inbox(
-        text = ' '.join(text),
+        text = " ".join(text),
         repo = cli.current_repo,
         context = cli.execution_context
     )
