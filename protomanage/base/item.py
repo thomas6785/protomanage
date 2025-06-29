@@ -3,7 +3,7 @@
 import uuid
 from abc import ABCMeta, abstractmethod
 
-from .words import wordify
+from ..misc.words import wordify
 
 class ItemMeta(ABCMeta):
     """
@@ -115,14 +115,19 @@ class Item(metaclass=ItemMeta):
         """TODO docs: write docstring"""
 
         type_info = dict["type"]
-        unique_name = type_info["unique_name"]
-        version = type_info["version"]
+        item_unique_name = type_info["unique_name"]
+        item_version = type_info["version"]
+        item_uuid = dict["uuid"]
 
-        for child in cls.CHILD_CLASSES:
-            if child.UNIQUE_NAME == unique_name and child.VERSION == version:
-                return child._from_dict(dict["data"],dict["type"])
+        # Find the appropriate Item subclass and instantiate it
+        for child in cls.CHILD_CLASSES: # TODO fix this: grandchildren of Item() won't be found due to CHILD_CLASSES only going up one level. Need some metaclass trickery here
+            if child.UNIQUE_NAME == item_unique_name and child.VERSION == item_version:
+                obj = child._from_dict(dict["data"],dict["type"])
 
-        raise ValueError(f"No matching Item subclass for UNIQUE_NAME={unique_name} and VERSION={version}")
+        # Assign base class members
+        obj._uuid = item_uuid
+
+        raise ValueError(f"No matching Item subclass for UNIQUE_NAME={item_unique_name} and VERSION={item_version}")
 
     @classmethod
     @abstractmethod

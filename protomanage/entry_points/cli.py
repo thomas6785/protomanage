@@ -16,7 +16,7 @@ from typing_extensions import Annotated
 
 # Local imports
 from ..legacy_temporary_experimental import base
-from .. import strings
+from ..misc import strings
 from ..base import repo as repo_lib
 from ..base.execution_context import ExecutionContext
 
