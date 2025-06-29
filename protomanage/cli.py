@@ -27,7 +27,7 @@ def config():
     """Edit the Protomanage configuration file."""
     base.open_config_file()
 
-@app.command(rich_help_panel="Test commands")
+@app.command(rich_help_panel="Inbox")
 def inbox(text: List[str]):
     """
     Adds a text entry to the Protomanage inbox.
@@ -39,7 +39,13 @@ def inbox(text: List[str]):
         text = " ".join(text),
         context = context
     )
-#    typer.echo(f"Added to inbox: {" ".join(text)}")
+
+@app.command(rich_help_panel="Inbox")
+def show_inbox():
+    """
+    TODO docs write docstring
+    """
+    current_repo.show_inbox()
 
 def main():
     """Main entry point for the Protomanage CLI."""
