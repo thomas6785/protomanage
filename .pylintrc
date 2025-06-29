@@ -352,7 +352,6 @@ indent-string='    '
 
 # Maximum number of characters on a single line.
 max-line-length=200
-# CUSTOMISED ^
 
 # Maximum number of lines in a module.
 max-module-lines=1000
@@ -360,12 +359,10 @@ max-module-lines=1000
 # Allow the body of a class to be on the same line as the declaration if body
 # contains single statement.
 single-line-class-stmt=yes
-# CUSTOMISED ^
 
 # Allow the body of an if to be on the same line as the test if there is no
 # else.
 single-line-if-stmt=yes
-# CUSTOMISED ^
 
 
 [IMPORTS]
@@ -411,12 +408,13 @@ preferred-modules=
 
 # The type of string formatting that logging methods do. `old` means using %
 # formatting, `new` is for `{}` formatting.
-logging-format-style=old
+logging-format-style=new
 
 # Logging modules to check that the string format arguments are in logging
 # function parameter format.
 logging-modules=logging
 
+disable=logging-fstring-interpolation
 
 [MESSAGES CONTROL]
 
