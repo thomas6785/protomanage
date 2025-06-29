@@ -8,7 +8,7 @@ from typing import List
 import json
 
 from .item import Item
-from .. import strings
+from ..misc import strings
 from .execution_context import ExecutionContext
 
 REPO_FOLDER_NAME = ".protomanage"
