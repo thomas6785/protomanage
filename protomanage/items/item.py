@@ -1,7 +1,7 @@
 """Module defines 'Item' class."""
 
 import uuid
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 
 from ..words import wordify
 
@@ -9,27 +9,68 @@ def new_string_obj(s):
     """Creates a new string object with the same content as argument 's'"""
     return ''.join(s)
 
-class Item(ABC):
+class ItemMeta(ABCMeta):
+    """
+    Use a metaclass to enforce:
+    - Class metadata should be set explicitly and not inherited
+    - Class constructor should call base class constructor
+    - from_dict(to_dict) should always return the same data
+    """
+    def __new__(mcs, name, bases, namespace, **kwargs):
+        cls = super().__new__(mcs, name, bases, namespace, **kwargs)
+
+        if len(bases) > 0:
+            ################################################################################
+            # Enforce that the new class's __init__ calls its base class' __init__
+            ################################################################################
+            if "__init__" in cls.__dict__:
+                orig_init = cls.__init__
+
+                def wrapped_init(self, *args, **kwargs):
+                    # Call base class __init__ first
+                    for base in cls.__mro__[1:]:
+                        if "__init__" in base.__dict__:
+                            base.__init__(self)
+                        orig_init(self, *args, **kwargs)
+
+                cls.__init__ = wrapped_init
+
+            ################################################################################
+            # Enforce that the new class's __init_subclass__ calls the base class' __init_subclass__
+            ################################################################################
+            if "__init_subclass__" in cls.__dict__:
+                orig_init_subclass = cls.__init_subclass__
+
+                def wrapped_init_subclass(self,*args,**kwargs):
+                    # Call base class __init_subclass__ first
+                    for base in cls.__mro__[1:]:
+                        if "__init_subclass__" in base.__dict__:
+                            base.__init_subclass__(self)
+                        orig_init_subclass(self,*args,**kwargs)
+
+                cls.__init_subclass__ = wrapped_init_subclass
+
+            ################################################################################
+            # Verify that class meta data has been set explicitly
+            ################################################################################
+            assert "DISPLAY_NAME" in cls.__dict__
+            assert "UNIQUE_NAME" in cls.__dict__
+            assert "VERSION" in cls.__dict__
+            assert cls.UNIQUE_NAME != cls.__base__.UNIQUE_NAME
+
+        cls.CHILD_CLASSES = []
+
+        return cls
+
+class Item(metaclass=ItemMeta):
     """Base class for items in Protomanage."""
 
     DISPLAY_NAME = "Item base class"
     UNIQUE_NAME = "protomanage.core.item-abstract-base-class"
     VERSION = "0.1"
-    CHILD_CLASSES = []
 
     def __init_subclass__(cls):
-        if cls.DISPLAY_NAME is cls.__base__.DISPLAY_NAME:
-            raise ValueError("Subclass must override DISPLAY_NAME from its base class.")
-        cls.DISPLAY_NAME = new_string_obj(cls.DISPLAY_NAME)
-
-        if cls.UNIQUE_NAME is cls.__base__.UNIQUE_NAME:
-            raise ValueError("Subclass must override UNIQUE_NAME from its base class.")
-        cls.UNIQUE_NAME = new_string_obj(cls.UNIQUE_NAME)
-
-        if cls.VERSION is cls.__base__.VERSION:
-            raise ValueError("Subclass must override VERSION from its base class.")
-        cls.VERSION = new_string_obj(cls.VERSION)
-
+        assert isinstance(cls,ItemMeta), "Subclass must use ItemMeta or a descendant as its metaclass"
         cls.__base__.CHILD_CLASSES.append(cls)
 
     def __init__(self):
@@ -69,6 +110,7 @@ class Item(ABC):
                 "unique_name": self.__class__.UNIQUE_NAME,
                 "version": self.__class__.VERSION
             },
+            "uuid": self.uuid,
             "data": self._to_dict()
         }
 
