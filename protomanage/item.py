@@ -1,13 +1,9 @@
 """Module defines 'Item' class."""
 
 import uuid
-from abc import ABC, ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod
 
-from ..words import wordify
-
-def new_string_obj(s):
-    """Creates a new string object with the same content as argument 's'"""
-    return ''.join(s)
+from .words import wordify
 
 class ItemMeta(ABCMeta):
     """

@@ -7,7 +7,7 @@ import logging
 from typing import List
 import json
 
-from .items import Item,InboxItem
+from .item import Item
 from . import strings
 from .execution_context import ExecutionContext
 
@@ -138,12 +138,8 @@ class Repo():
 
         items_file = self._repo_path / "items.json"
 
-        try:
-            pretty_json = json.dumps([item.to_dict() for item in self.items], indent=4)
-            items_file.write_text(pretty_json)
-        except Exception as e:
-            self._logger.error(f"Failed to save items to {items_file}: {e}")
-            raise IOError(f"Failed to save items to {items_file}: {e}") from e
+        pretty_json = json.dumps([item.to_dict() for item in self.items], indent=4)
+        items_file.write_text(pretty_json)
 
     @staticmethod
     def create_new(repo_path : Path) -> None:
@@ -183,26 +179,6 @@ class Repo():
     def repo_path(self) -> Path:
         """Get the path to the repo."""
         return self._repo_path
-
-    def add_to_inbox(self, context: ExecutionContext, text: str) -> None:
-        """Add a simple InboxItem to the repo's item list."""
-
-        item = InboxItem(context=context, text=text)  # Create an InboxItem instance
-        self.add_item(item)  # Add the item to the repo's items
-        self._logger.info(strings.INBOX_ITEM_ADDED)
-
-    def show_inbox(self) -> List[InboxItem]:
-        """Retrieve all InboxItems from the repo's items list."""
-
-        inbox_items = [item for item in self._items if isinstance(item, InboxItem)]
-        if not inbox_items:
-            self._logger.info("No items in inbox.")
-            print("No items in inbox.")
-        else:
-            self._logger.info(f"Found {len(inbox_items)} items in inbox.")
-
-            for item in inbox_items:
-                print(str(item))
 
 class HomeRepo(Repo):
     """The home repo is a special repo at ~. In addition to being a normal repo, it contains a list of all other repos, and all other repos inherit config from it."""
@@ -264,6 +240,11 @@ def find_repo(cwd : Path) -> Repo:
                 logging.error(f"Failed to load repo at {repo_path}: {e}")
                 raise FileNotFoundError(f"Failed to load repo at {repo_path}: {e}") from e
         current_path = current_path.parent
+    return HomeRepo()
+
+def get_home_repo() -> HomeRepo:
+    """Return the Protomanage home repo"""
+    
     return HomeRepo()
 
 if __name__ == "__main__":
