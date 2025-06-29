@@ -2,53 +2,50 @@
 TODO docs: write docstring
 """
 
-import argparse
-from dataclasses import dataclass
-import sys
+# Standard imports
+from typing import List
+from pathlib import Path
 
+# Third-party imports
+import typer
+
+# Local imports
+from . import base
 from . import strings
+from . import repo as repo_lib
+from .execution_context import ExecutionContext
 
-def subcommand_help():
-    """TODO docs: write docstring"""
-    pass
+app = typer.Typer(
+    no_args_is_help=True,
+    help=strings.PROTOMANAGE_CLI_DESCRIPTION
+)
 
-def subcommand_config():
-    """TODO docs: write docstring"""
-    pass
+APP_NAME = "protomanage"
 
-def subcommand_inbox():
-    """TODO docs: write docstring"""
-    pass
+@app.command(rich_help_panel="Configuration")
+def config():
+    """Edit the Protomanage configuration file."""
+    base.open_config_file()
 
-def handle_invalid_command():
-    """TODO docs: write docstring"""
-    pass
+@app.command(rich_help_panel="Test commands")
+def inbox(text: List[str]):
+    """
+    Adds a text entry to the Protomanage inbox.
 
-@dataclass
-class Subcommand:
-    """TODO docs: write docstring"""
-    help_text: str
-    method: callable
-
-subcommands = {
-    "config":          Subcommand(strings.CLI_SUBCOMMAND_CONFIG_HELP,       subcommand_config),
-    "help":            Subcommand(strings.CLI_SUBCOMMAND_HELP_HELP,         subcommand_help),
-    "inbox":           Subcommand(strings.CLI_SUBCOMMAND_INBOX_HELP,        subcommand_inbox),
-}
+    Args:
+        text (str): The text to be added to the inbox.
+    """
+    current_repo.add_to_inbox(
+        text = " ".join(text),
+        context = context
+    )
+#    typer.echo(f"Added to inbox: {" ".join(text)}")
 
 def main():
-    """TODO docs: write docstring"""
+    """Main entry point for the Protomanage CLI."""
+    global current_repo, context
 
-    subcommand_str = sys.argv[1]
+    current_repo = repo_lib.find_repo(Path.cwd())
+    context = ExecutionContext()
 
-    # Match the subcommand
-    if subcommand_str not in subcommands:
-        handle_invalid_command()
-        sys.exit(1)
-    else:
-        subcommand = subcommands[subcommand_str]
-        subcommand.method()
-        sys.exit(0)
-
-if __name__ == "__main__":
-    main()
+    app()
