@@ -8,8 +8,6 @@ from typing import List
 import json
 
 from .item import Item
-from ..misc import strings
-from .execution_context import ExecutionContext
 
 REPO_FOLDER_NAME = ".protomanage"
 HOME_REPO_PATH = (Path("~") / REPO_FOLDER_NAME).expanduser()
@@ -17,8 +15,10 @@ HOME_REPO_PATH = (Path("~") / REPO_FOLDER_NAME).expanduser()
 @dataclass
 class RepoConfig():
     """Dataclass to store config for a Protomanage repository."""
+    # Everything should be initialised to 'None' so it can be overwritten by config.json first and than by default_config.json
 
     default_text_editor : str = None
+    use_pretty_json : bool = False
 
 class Repo():
     """A Protomanage repository class."""
@@ -35,33 +35,20 @@ class Repo():
             raise ValueError(f"repo path '{repo_path}' does not end with expected {REPO_FOLDER_NAME}")
 
         self._repo_path = repo_path
-        if not isinstance(self, HomeRepo):
-            self.home_repo = HomeRepo()
-            self._touch()
-        else:
-            self.home_repo = self
-
         self._config     = self._load_config()
         self._uuid       = self._load_uuid()
         self._items      = self._load_items()
         self._pm_version = self._load_version()
 
-    def _touch(self) -> None:
-        """Ensures the repo is registered with the home repo"""
-        self.home_repo.register_repo(self)
-
     def _load_config(self) -> RepoConfig:
-        """Load the repo config. Take the local config.json first, then the home repo config.json, then the defaults from Protomanage."""
+        """Load the repo config. Take the local config.json first, then the defaults from the install."""
 
         config = RepoConfig()
 
         config_files = [
             self.repo_path / "config.json",
-            HOME_REPO_PATH / "config.json",
             Path(__file__).parent / "default_config.json"  # Default config file in the Protomanage package
         ]
-        if isinstance(self, HomeRepo):
-            config_files.pop(1)
 
         for config_file in config_files:
             if config_file.exists():
@@ -96,18 +83,30 @@ class Repo():
     def _load_items(self) -> List[Item]:
         """Load the items from the items.json file."""
 
-        items_file = self._repo_path / "items.json"
-        if not items_file.exists():
-            self._logger.error(f"Items file {items_file} missing.")
-            raise FileNotFoundError(f"Items file {items_file} missing.")
+        items_dir = self._repo_path / "items"
+        if not items_dir.is_dir():
+            self._logger.warning(f"Items directory {items_dir} missing. Creating a new one.")
+            items_dir.mkdir()
 
-        try:
-            items_data = json.loads(items_file.read_text())
-            items = [Item.from_dict(i) for i in items_data]
-            return items
-        except json.JSONDecodeError as e:
-            self._logger.error(f"Invalid JSON in {items_file}: {e}")
-            raise ValueError(f"Invalid JSON in {items_file}: {e}") from e
+        items = []
+        for item_file in items_dir.iterdir():
+            if item_file.is_file() and item_file.suffix == ".json":
+                # Read in the file JSON
+                try:
+                    item_data = json.loads(item_file.read_text())
+                except Exception as e:
+                    self._logger.error(f"Failed to load item from {item_file}: {e}")
+                    raise ValueError(f"Failed to load item from {item_file}: {e}")
+
+                # Validate the file name matches the UUID in the JSON
+                if item_file.stem != item_data.get("uuid"):
+                    self._logger.error(f"UUID mismatch: file {item_file.name} vs item_data uuid {item_data.get('uuid')}")
+                    raise ValueError(f"UUID mismatch: file {item_file.name} vs item_data uuid {item_data.get('uuid')}")
+
+                # Convert to an Item and store it
+                items.append(Item.from_dict(item_data))
+        
+        return items
 
     def _load_version(self) -> str:
         """Get the Protomanage version from the PM_VERSION file."""
@@ -122,7 +121,7 @@ class Repo():
     def __str__(self) -> str:
         """String representation of the repo, showing the path and UUID."""
 
-        return f"Repo(path={self._repo_path}, uuid={self._uuid})"
+        return f"Repo(path={self.repo_path}, uuid={self.uuid})"
 
     def add_item(self, item: Item) -> None:
         """Add an item to the repo's items list."""
@@ -136,13 +135,19 @@ class Repo():
     def _save_items(self) -> None:
         """Save the items to the items.json file."""
 
-        items_file = self._repo_path / "items.json"
+        items_dir = self._repo_path / "items"
 
-        pretty_json = json.dumps([item.to_dict() for item in self.items], indent=4)
-        items_file.write_text(pretty_json)
+        if not items_dir.is_dir():
+            self._logger.warning(f"Items directory {items_dir} missing. Creating a new one.")
+            items_dir.mkdir()
+
+        for item in self.items:
+            item_file = items_dir / f"{item.uuid}.json"
+            item_json = json.dumps(item.to_dict(), indent=4 if self.config.use_pretty_json else None)
+            item_file.write_text(item_json)
 
     @staticmethod
-    def create_new(repo_path : Path) -> None:
+    def create_new(repo_path : Path) -> None: # TODO move this to init_repo.py ?
         """Create a new Protomanage repo at the specified location."""
 
         repo_path.mkdir(parents=True, exist_ok=True)
@@ -150,8 +155,8 @@ class Repo():
         uuid = str(uuid_lib.uuid4())
 
         # Create boilerplate repo
-        (repo_path / "config.json"     ).write_text("{}")
-        (repo_path / "items.json"      ).write_text("{}")
+        (repo_path  / "items"          ).mkdir()
+        (repo_path / "config.json"     ).write_text("{}") # TODO add option to create a config.json populated with nulls instead
         (repo_path / "PM_VERSION"      ).write_text("TODO version numbering")
         (repo_path / "uuid"            ).write_text(uuid)
 
@@ -180,53 +185,6 @@ class Repo():
         """Get the path to the repo."""
         return self._repo_path
 
-class HomeRepo(Repo):
-    """The home repo is a special repo at ~. In addition to being a normal repo, it contains a list of all other repos, and all other repos inherit config from it."""
-
-    def __init__(self):
-        """Load in a home repo."""
-
-        if not HOME_REPO_PATH.exists():
-            self.create_new(HOME_REPO_PATH)
-
-        super().__init__(HOME_REPO_PATH)
-
-        # Load the repo list
-        repo_list_path = self._repo_path / "repo_list.json"
-
-        if not repo_list_path.exists():
-            self._logger.error(f"Repo list file {repo_list_path} was not found!")
-            raise FileNotFoundError(f"Repo list file {repo_list_path} was not found!")
-
-        self.repo_list = json.loads(repo_list_path.read_text())
-
-    @staticmethod
-    def create_new(repo_path : Path) -> None:
-        """Create a new home repo."""
-
-        if repo_path != HOME_REPO_PATH:
-            raise ValueError(f"Home repo must be created at {HOME_REPO_PATH}, not {repo_path}")
-
-        Repo.create_new(repo_path)
-        ( repo_path / "repo_list.json" ).write_text("{}") # Create the repo list file
-
-    def register_repo(self,repo : Repo):
-        """Register a new repo with the home repo."""
-
-        # Load existing repo list
-        repo_list_path = self._repo_path / "repo_list.json"
-        if not repo_list_path.exists():
-            self._logger.warning(f"Repo list file {repo_list_path} does not exist, creating a new one.")
-            repo_list = {}
-        else:
-            repo_list = json.loads(repo_list_path.read_text())
-
-        # Add the new repo
-        repo_list[repo.uuid] = str(repo.repo_path)
-
-        # Save the updated list
-        repo_list_path.write_text(json.dumps(repo_list, indent=4))
-
 def find_repo(cwd : Path) -> Repo:
     """Find a Protomanage repo starting from the current working directory and moving up the directory tree."""
 
@@ -240,13 +198,9 @@ def find_repo(cwd : Path) -> Repo:
                 logging.error(f"Failed to load repo at {repo_path}: {e}")
                 raise FileNotFoundError(f"Failed to load repo at {repo_path}: {e}") from e
         current_path = current_path.parent
-    return HomeRepo()
+    return get_home_repo()
 
-def get_home_repo() -> HomeRepo:
+def get_home_repo() -> Repo:
     """Return the Protomanage home repo"""
-    
-    return HomeRepo()
 
-if __name__ == "__main__":
-    my_repo = find_repo(Path.cwd())
-    print(f"Found repo: {my_repo}")
+    return Repo(HOME_REPO_PATH)
