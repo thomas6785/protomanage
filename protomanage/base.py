@@ -45,9 +45,3 @@ def open_config_file():
     """TODO docs: write docstring"""
 
     open_file_for_edit(env.CONFIG_FILE_PATH)
-
-
-def add_to_inbox(context,text):
-    """TODO docs: write docstring"""
-
-    pass
