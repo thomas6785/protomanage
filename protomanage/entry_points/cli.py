@@ -15,10 +15,10 @@ import typer
 from typing_extensions import Annotated
 
 # Local imports
-from . import base
-from . import strings
-from . import repo as repo_lib
-from .execution_context import ExecutionContext
+from ..legacy_temporary_experimental import base
+from .. import strings
+from ..base import repo as repo_lib
+from ..base.execution_context import ExecutionContext
 
 app = typer.Typer(
     no_args_is_help=True,
