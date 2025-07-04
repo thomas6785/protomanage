@@ -27,7 +27,7 @@ class ItemMeta(ABCMeta):
                     for base in cls.__mro__[1:]:
                         if "__init__" in base.__dict__:
                             base.__init__(self)
-                        orig_init(self, *args, **kwargs)
+                    orig_init(self, *args, **kwargs)
 
                 cls.__init__ = wrapped_init
 
@@ -119,15 +119,18 @@ class Item(metaclass=ItemMeta):
         item_version = type_info["version"]
         item_uuid = dict["uuid"]
 
+        obj = None
         # Find the appropriate Item subclass and instantiate it
         for child in cls.CHILD_CLASSES: # TODO fix this: grandchildren of Item() won't be found due to CHILD_CLASSES only going up one level. Need some metaclass trickery here
             if child.UNIQUE_NAME == item_unique_name and child.VERSION == item_version:
                 obj = child._from_dict(dict["data"],dict["type"])
+        if not obj:
+            raise ValueError(f"No matching Item subclass for UNIQUE_NAME={item_unique_name} and VERSION={item_version}")
 
         # Assign base class members
         obj._uuid = item_uuid
 
-        raise ValueError(f"No matching Item subclass for UNIQUE_NAME={item_unique_name} and VERSION={item_version}")
+        return obj
 
     @classmethod
     @abstractmethod
