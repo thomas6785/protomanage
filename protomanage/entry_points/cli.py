@@ -15,7 +15,6 @@ import typer
 from typing_extensions import Annotated
 
 # Local imports
-from ..legacy_temporary_experimental import base
 from ..misc import strings
 from ..base import repo as repo_lib
 from ..base.execution_context import ExecutionContext
@@ -25,27 +24,19 @@ app = typer.Typer(
     help=strings.PROTOMANAGE_CLI_DESCRIPTION
 )
 
-APP_NAME = "protomanagee"
-
-@app.command(rich_help_panel="Configuration")
-def config():
-    """Edit the Protomanage configuration file."""
-    base.open_config_file()
+APP_NAME = "protomanage"
 
 @app.callback(invoke_without_command=True)
 def app_callback(
-    verbose : Annotated[bool, typer.Option("--verbose", "-v")] = False,
-    home_repo : Annotated[bool, typer.Option("--home-repo", "-g")] = False
+    verbose : Annotated[bool, typer.Option("--verbose", "-v")] = False
 ):
     """TODO docs write docstring"""
 
     if verbose:
         print("Hello from the application callback!")
 
-    global current_repo, execution_context
+execution_context = ExecutionContext()
+current_repo = repo_lib.find_repo(execution_context.cwd)
+current_repo.configure_app(app,execution_context)
 
-    execution_context = ExecutionContext()
-    if home_repo:
-        current_repo = repo_lib.find_repo
-    else:
-        current_repo = repo_lib.find_repo(execution_context.cwd)
+app()
