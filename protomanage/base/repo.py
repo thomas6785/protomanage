@@ -2,10 +2,13 @@
 
 from pathlib import Path
 from dataclasses import dataclass
+import importlib.util
 import uuid as uuid_lib
 import logging
 from typing import List
 import json
+import sys
+import os
 
 from .item import Item
 
@@ -17,8 +20,8 @@ class RepoConfig():
     """Dataclass to store config for a Protomanage repository."""
     # Everything should be initialised to 'None' so it can be overwritten by config.json first and than by default_config.json
 
-    default_text_editor : str = None
-    use_pretty_json : bool = False
+    default_text_editor: str  = os.environ.get("EDITOR") or ("notepad" if os.name == "nt" else "vim")
+    use_pretty_json: bool     = False
 
 class Repo():
     """A Protomanage repository class."""
@@ -35,40 +38,39 @@ class Repo():
             raise ValueError(f"repo path '{repo_path}' does not end with expected {REPO_FOLDER_NAME}")
 
         self._repo_path = repo_path
-        self._config     = self._load_config()
-        self._uuid       = self._load_uuid()
-        self._items      = self._load_items()
-        self._pm_version = self._load_version()
+        self._load_config()
+        self._uuid       = self._load_uuid() # TODO rewrite to assign var inside the method
+        self._plugins    = self._load_plugins() # TODO rewrite to assign var inside the method
+        self._items      = self._load_items() # TODO rewrite to assign var inside the method
+        self._pm_version = self._load_version() # TODO rewrite to assign var inside the method
 
-    def _load_config(self) -> RepoConfig:
+    def _load_config(self):
         """Load the repo config. Take the local config.json first, then the defaults from the install."""
 
         config = RepoConfig()
+        config_file = self.repo_path / "config.json"
 
-        config_files = [
-            self.repo_path / "config.json",
-            Path(__file__).parent / "default_config.json"  # Default config file in the Protomanage package
-        ]
+        if config_file.exists():
+            try:
+                self._logger.debug(f"Loading config from {config_file}")
+                config_data = json.loads(config_file.read_text())
+                for key, value in config_data.items():
+                    if not hasattr(config, key):
+                        self._logger.error(f"Unknown config key '{key}' in {config_file}")
+                        raise ValueError(f"Unknown config key '{key}' in {config_file}")
+                    if value is not None:
+                        self._logger.debug(f"Setting config '{key}' to '{value}' from {config_file}")
+                        setattr(config, key, value)
+                    else:
+                        self._logger.debug(f"Config key '{key}' in {config_file} is None, default value will be used.")
+            except json.JSONDecodeError as e:
+                self._logger.error(f"Invalid JSON in {config_file}: {e}")
+                raise ValueError(f"Invalid JSON in {config_file}: {e}") from e
 
-        for config_file in config_files:
-            if config_file.exists():
-                try:
-                    self._logger.debug(f"Loading config from {config_file}")
-                    config_data = json.loads(config_file.read_text())
-                    for key, value in config_data.items():
-                        if not hasattr(config, key):
-                            self._logger.error(f"Unknown config key '{key}' in {config_file}")
-                            raise ValueError(f"Unknown config key '{key}' in {config_file}")
-                        if getattr(config, key, None) is not None:
-                            self._logger.debug(f"Setting config '{key}' to '{value}' from {config_file}")
-                            setattr(config, key, value)
-                        else:
-                            self._logger.debug(f"Config '{key}' is already set to '{value}', skipping from {config_file}")
-                except json.JSONDecodeError as e:
-                    self._logger.error(f"Invalid JSON in {config_file}: {e}")
-                    raise ValueError(f"Invalid JSON in {config_file}: {e}") from e
+        self._config = config
 
-        return config
+    def update_config(self) -> None:
+        self._load_config()
 
     def _load_uuid(self) -> str:
         """Get the UUID of the repo from the uuid file."""
@@ -146,6 +148,32 @@ class Repo():
             item_json = json.dumps(item.to_dict(), indent=4 if self.config.use_pretty_json else None)
             item_file.write_text(item_json)
 
+    def _load_plugins(self) -> None:
+        """Load in plugins (module objects) and returns a list of these objects"""
+        plugins = []
+        plugins_dir = self.repo_path / "plugins"
+
+        if plugins_dir.exists() and plugins_dir.is_dir():
+            for plugin_path in plugins_dir.iterdir():
+                init_file = plugin_path / "__init__.py"
+                module_name = f"{plugin_path.name}"
+                if init_file.exists():
+                    plugins.append( _import_from_path(module_name,init_file) )
+                else:
+                    raise Exception(f"Plugin at directory {plugin_path} has no __init__.py file")
+
+        return plugins
+
+    def configure_app(self, app, execution_context) -> None:
+        """Takes an arbitrary 'app' and passes it on to each plugin for configuration"""
+
+        for plugin in self.plugins:
+            if hasattr(plugin, "configure_app"):
+                plugin.configure_app(app, self, execution_context)
+            else:
+                self._logger.error(f"Plugin package {plugin.__name__} does not have a configure_app function.")
+                raise Exception(f"Plugin package {plugin.__name__} does not have a configure_app function.")
+
     @staticmethod
     def create_new(repo_path : Path) -> None: # TODO move this to init_repo.py ?
         """Create a new Protomanage repo at the specified location."""
@@ -159,6 +187,10 @@ class Repo():
         (repo_path / "config.json"     ).write_text("{}") # TODO add option to create a config.json populated with nulls instead
         (repo_path / "PM_VERSION"      ).write_text("TODO version numbering")
         (repo_path / "uuid"            ).write_text(uuid)
+
+    @property
+    def plugins(self) -> List['module']:
+        return self._plugins
 
     @property
     def uuid(self) -> str:
@@ -204,3 +236,10 @@ def get_home_repo() -> Repo:
     """Return the Protomanage home repo"""
 
     return Repo(HOME_REPO_PATH)
+
+def _import_from_path(module_name, file_path):
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
