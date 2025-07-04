@@ -21,3 +21,6 @@ do_not_track/
 # Ignore temporary editor files
 **/*~
 **/*.swp
+
+# Ignore diagrams
+*.drawio
