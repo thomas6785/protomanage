@@ -57,3 +57,102 @@ When "init" is run, it creates a ".protomanage" folder at the current working di
 When any Protomanage command is run, it checks the current directory for a .protomanage, and moves up the directories until it finds one. If none are found, it will default to the home repository (~/.protomanage).
 
 You can explicitly use the home repo with the "--home" or "-g" flag.
+
+# Project structure
+protomanage/                                   #
+    views/                                     # Each view creates an object that can be imported into each plugin to configure the plugin's behaviour
+        cli.py                                 # Creates the CLI app and defines its callback
+    core_plugins/                              #
+        inbox.py                               #
+        simple_tasks.py                        #
+    custom_plugins/                            #
+        whatever.py                            #
+    misc/                                      #
+        strings.py                             # Strings for non-plugins
+        words.py                               # Words utility (could make this a plugin down the line? not sure what the API is going to be like there)
+        exceptions.py                          # Exception classes
+    plugins.py                                 # Methods for importing core and custom plugins - needs to access config.json to know which ones to import!
+    repo.py                                    # Repo and HomeRepo classes
+    execution_context.py                       # ExecutionContext for noting context around a command
+    item.py                                    # Item ABC and metaclass
+    __init__.py                                # entry-point for module import - should give Python API
+    __main__.py                                # entry-point for module invocation - should point to CLI
+
+Basic execution order:
+- the view creates an application object
+- call plugins.py to import all the plugins, which will each configure the app to suit their needs (may need arbitration in case of conflicts)
+- the view receives one or more commands - the callback or view entry point should:
+    - set current_repo
+    - set execution_context
+    - call upon the appropriate plugin method
+- plugin executes the command
+
+__main__.py
+    current_repo = find_current_repo
+    app = cli.create_app()
+    plugins_list = read config.json from current_repo
+    plugins.configure_app(app, plugins_list )
+
+Entry point (script), should:
+    Create an 'app' object, which could be:
+        cli
+        pcli
+        Python API
+    
+    Configure the app
+        For each plugin, call plugin.configure_app(app) (it will need to infer the application type)
+
+An entry point script creates an app object (could be imported but doesn't need to be tbh)
+Configures the app by calling on the appropriate plugins
+Runs the app by looping through a series of incoming commands
+Saves and exits
+
+cli:
+    Create a typer 'app' object
+    Get the current repository and read config.json
+    For each plugin, call configure_app(app) to add new commands to app
+    Execute the application
+
+# New design philosophy
+Okay, so we are leaning heavier into the "everything is local" plan:
+- The home repo no longer tracks local repos - all repos behave exactly the same except for the fact that apps/views generally treat home as the default
+- Plugins are no longer stored with the install - instead, they are repo specific
+    - Each repo has a plugins/ folder
+    - You can "pm plugin install" to add to this folder FOR THE CURRENT REPO
+    - When you do, you can either install 'core' plugins (which will get copied from the install source) or from the web
+        The fact that we are making a copy means it is frozen and will be future-proof!
+        When a new update occurs, we can try automatically detect this and offer to migrate, but it is not required
+
+
+Separate Item Files Idea:
+- Consider having "items" stored as separate files instead?
+- Name would be their uuid and they contain their data
+- This makes them a bit more portable for moving between repos (for example)
+- Also makes tracking with git a lot simpler
+- and saves us from having a MASSIVE items.json file
+- probably more expensive to load in?
+- but if we get smart with loading in selectively, could be a lot more efficient
+- maybe maintain a "cache index" JSON file of all the items which can be used for quicker access
+
+.protomanage/
+    config.json                          # no longer inherits absent values from home repo - but can still inherit defaults at install
+                                         # Choose when creating a repo if you want a "full" config file (with 'null' in everything to
+                                         # inherit) or an empty one
+    repo_info.json                       # UUID, other stuff? PM version?
+    items/
+        10249084329685924802.json        # Each item gets its own file named for its UUID
+        item_index_cache.json            # Maybe ? could get very complicated
+    plugins/
+        protomanage.core.inbox/          # See naming convention for plugins below
+            inbox.py
+            strings.py
+            plugin_info.json             # # Version number? or store this with each item?
+        protomanage.thomas6785.obsidian/ # See naming convention for plugins below
+            obsidian.py
+            strings.py
+            plugin_info.json             # Version number? or store this with each item?
+
+Plugin unique naming:
+    protomanage.devusername.plugin-name
+Item type unique naming:
+    protomanage.devusername.plugin-name.item-name
