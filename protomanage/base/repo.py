@@ -15,13 +15,138 @@ from .item import Item
 REPO_FOLDER_NAME = ".protomanage"
 HOME_REPO_PATH = (Path("~") / REPO_FOLDER_NAME).expanduser()
 
+class MultiItemEditSession:
+    """
+    Context manager for editing multiple items. Instantiates ItemEditSession for each one.
+
+    Sample usage:
+        with MultiItemEditSession( inbox_items ) as inbox_items:
+            # do stuff to those items knowing they are safely
+            # backed up and will be saved when you're done
+    """
+
+    def __init__(self, items: List["Item"]):
+        self.items = items
+        self._logger = logging.getLogger(__name__)
+        self.sessions = []
+
+    def __enter__(self) -> List["Item"]:
+        """Create an edit session for each item"""
+        for item in self.items:
+            item_edit_session = ItemEditSession(item)
+            item_edit_session.__enter__()
+            self.sessions.append(item_edit_session)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Close the edit sessions open for each item"""
+        for item_edit_session in self.sessions:
+            item_edit_session.__exit__(exc_type, exc_val, exc_tb)
+        return False # do not suppress exceptions
+
+class ItemEditSession:
+    """
+    Context manager for editing items. Provides transaction-like behavior
+    where changes are only saved if the context exits successfully.
+    """
+    locked_items = []
+
+    def __init__(self, item: "Item"):
+        self.item = item
+        self._logger = logging.getLogger(__name__)
+
+    def __enter__(self) -> "Item":
+        """Enter the editing session and create a backup."""
+        if self.item in ItemEditSession.locked_items:
+            raise ItemLockedError(f"Item {self.item} is already opened for edit in another ItemEditSession")
+
+        ItemEditSession.locked_items.append(self.item)
+
+        # Create backup of original item data
+        self.item._create_backup()
+
+        self._logger.debug(f"Started edit session for item {self.item}")
+        return self.item
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the editing session and handle saving/rollback."""
+
+        if exc_type is None:
+            self.item._save()
+            self._logger.debug(f"Saved item {self.item}")
+            self.item._delete_backup()
+            self._logger.debug(f"Deleted backup for item {self.item}")
+        else:
+            # Exception occurred - rollback changes
+            self._logger.error(
+                f"Exception in edit session, item {self.item} may not have been saved. Find backup at {self.item._backup_path}"
+            )
+
+        # Remove the item from locked_items regardless of exception
+        if self.item in ItemEditSession.locked_items:
+            ItemEditSession.locked_items.remove(self.item)
+
+        return False  # Don't suppress exceptions
+
 @dataclass
 class RepoConfig():
     """Dataclass to store config for a Protomanage repository."""
-    # Everything should be initialised to 'None' so it can be overwritten by config.json first and than by default_config.json
 
-    default_text_editor: str  = os.environ.get("EDITOR") or ("notepad" if os.name == "nt" else "vim")
-    use_pretty_json: bool     = False
+    def __init__(self, config_file_path : Path = None):
+        self._logger = logging.getLogger(__name__)
+        self.config_file_path = config_file_path
+        self.customised_keys = []
+
+        self.__init_defaults()
+        self._logger.debug("Set default config values")
+
+        if config_file_path:
+            self._logger.debug(f"Loading config values from {config_file_path}")
+            self.__load_from_file()
+            self._logger.debug(f"Finished loading config values")
+        else:
+            self._logger.debug(f"Got no config file path, using default values")
+
+    def __init_defaults(self) -> None:
+        self.default_text_editor    : str     = os.environ.get("EDITOR") or ("notepad" if os.name == "nt" else "vim")
+        self.use_pretty_json        : bool    = False
+        self.plugin_configs         : dict    = {}
+        # Want to add new config keys? Just put them right here.
+
+    def __load_from_file(self) -> None:
+        if not self.config_file_path or not Path(self.config_file_path).exists():
+            self._logger.warning(f"Config file {self.config_file_path} does not exist.")
+            return
+
+        with open(self.config_file_path, "r", encoding="utf8") as f:
+            try:
+                config_data = json.load(f)
+            except json.JSONDecodeError as e:
+                self._logger.error(f"Invalid JSON in config file {self.config_file_path}: {e}")
+                raise
+
+        for key, value in config_data.items():
+            self.__set_key(key,value)
+
+        self.__save_to_file()
+
+    def set_key(self,key,value):
+        self.__set_key(key,value)
+        self.__save_to_file()
+
+    def __set_key(self,key,value):
+        if hasattr(self, key):
+            self._logger.debug(f"Setting config attribute '{key}' to '{value}'")
+            setattr(self, key, value)
+            self.customised_keys.append(key)
+        else:
+            self._logger.error(f"Unknown config key '{key}'")
+            raise ValueError(f"Unknown config key '{key}'")
+
+    def __save_to_file(self):
+        config_to_save = {key: getattr(self, key) for key in self.customised_keys}
+        with open(self.config_file_path, "w", encoding="utf8") as f:
+            json.dump(config_to_save, f, indent=4 if self.use_pretty_json else None)
+        self._logger.debug(f"Saved user's customised config keys to {self.config_file_path}")
 
 class Repo():
     """A Protomanage repository class."""
@@ -189,7 +314,7 @@ class Repo():
         (repo_path / "uuid"            ).write_text(uuid)
 
     @property
-    def plugins(self) -> List['module']:
+    def plugins(self) -> List["module"]:
         return self._plugins
 
     @property
